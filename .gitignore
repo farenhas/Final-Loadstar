@@ -1,0 +1,28 @@
+﻿# Virtual environment
+.venv/
+venv/
+env/
+ENV/
+
+# Dataset
+dataset/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Model artifacts
+*.pkl
+*.h5
+*.sav
+
+# Folder models
+models/
+
+# Streamlit
+.streamlit/
+
+# OS junk
+.DS_Store
+Thumbs.db
