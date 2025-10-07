@@ -4,8 +4,6 @@ venv/
 env/
 ENV/
 
-# Dataset
-dataset/
 
 # Python cache
 __pycache__/
