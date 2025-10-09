@@ -13,7 +13,7 @@ from feeders import birem, gegger, labang, tragah, torjun
 # ============================================================
 st.set_page_config(page_title="Load Monitor & Forecast System", layout="wide")
 
-logo_path = Path(r"D:\Magang\ForecastArus\loadstar.png")
+logo_path = Path(r"D:\PLN-Loadstar\loadstar.png")
 
 def get_base64_logo(img_path):
     with open(img_path, "rb") as f:
@@ -22,38 +22,41 @@ def get_base64_logo(img_path):
 logo_base64 = get_base64_logo(logo_path) if logo_path.exists() else ""
 
 # ============================================================
-# CUSTOM CSS WITH BOOTSTRAP
+# CUSTOM CSS WITH BOOTSTRAP - HEADER & BACKGROUND ONLY
 # ============================================================
 st.markdown(f"""
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.1.3/dist/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
 <style>
-body {{
-    background-color: #f5f7fa;
+.stApp {{
+    background-color: #e8ecef !important;
 }}
 .main-header {{
-    background-color: white;
-    border-bottom: 2px solid #e0e0e0;
-    padding: 1rem 2rem;
-    margin-bottom: 2rem;
+    background-color: #ffffff;
+    padding: 1.2rem 2.5rem;
+    margin: -50px -80px 2rem -80px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    position: sticky;
+    z-index: 999;
 }}
 .logo-section {{
     display: flex;
     align-items: center;
-    gap: 1rem;
 }}
 .logo-section img {{
-    height: 50px;
+    height: 45px;
+    width: auto;
+    margin-right: 1.2rem;
 }}
 .dashboard-title {{
-    font-size: 1.5rem;
+    font-size: 1.75rem;
     font-weight: 600;
-    color: #1e293b;
+    color: #2c3e50;
     margin: 0;
 }}
 .card {{
     background: white;
     border: none;
-    border-radius: 12px;
+    border-radius: 0px; /* ✅ Sudut lancip */
     box-shadow: 0 2px 12px rgba(0,0,0,0.08);
     margin-bottom: 1.5rem;
     overflow: hidden;
@@ -65,16 +68,17 @@ body {{
     font-weight: 600;
     padding: 1rem 1.5rem;
     border: none;
+    border-radius: 0px; 
 }}
 .card-body {{
     padding: 1.5rem;
+    border-radius: 0px; 
 }}
 .rec-card {{
-    border-radius: 8px;
+    border-radius: 0px; 
     margin-bottom: 0.75rem;
     display: flex;
     align-items: center;
-    gap: 1rem;
     padding: 0.75rem 1rem;
     transition: transform 0.2s;
 }}
@@ -100,6 +104,7 @@ body {{
     font-size: 1.5rem;
     min-width: 30px;
     text-align: center;
+    margin-right: 1rem;
 }}
 #MainMenu {{visibility: hidden;}}
 footer {{visibility: hidden;}}
@@ -107,13 +112,15 @@ footer {{visibility: hidden;}}
     background: white;
 }}
 </style>
+
 <div class="main-header">
     <div class="logo-section">
-        <img src="data:image/png;base64,{logo_base64}" alt="Logo">
-        <div class="dashboard-title">Load Monitoring Dashboard</div>
+        <img src="data:image/png;base64,{logo_base64}" alt="LoadStar Logo">
+        <div class="dashboard-title">Load Forecaster Dashboard</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
+
 
 # ============================================================
 # KONSTANTA
@@ -223,7 +230,6 @@ if selected_feeder and start_date and end_date:
     df_hist["timestamp"] = pd.to_datetime(df_hist["timestamp"])
     last_data_time = df_hist["timestamp"].max()
 
-    # Konversi start_date dan end_date ke datetime dengan waktu penuh hari
     period_start = pd.to_datetime(datetime.combine(start_date, time.min))
     period_end = pd.to_datetime(datetime.combine(end_date, time.max))
 
@@ -243,7 +249,7 @@ if selected_feeder and start_date and end_date:
     col_left, col_right = st.columns([2, 1])
 
     with col_left:
-        st.markdown('<div class="card"><div class="card-header">📊 Beban Real-Time</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="card"><div class="card-header">Beban Real-Time</div></div>', unsafe_allow_html=True)
         
         fig_hist = go.Figure()
         fig_hist.add_trace(go.Scatter(
@@ -270,7 +276,7 @@ if selected_feeder and start_date and end_date:
     with col_right:
         partner_list = feeder_pairs.get(selected_feeder.lower(), [])
         
-        recommendations_html = '<div class="card"><div class="card-header">⚡ Rekomendasi Manuver</div><div class="card-body">'
+        recommendations_html = '<div class="card"><div class="card-header">Rekomendasi Manuver</div><div class="card-body">'
         
         if not partner_list:
             recommendations_html += '<p class="text-muted">Feeder ini tidak memiliki pasangan transfer.</p>'
@@ -327,13 +333,12 @@ if selected_feeder and start_date and end_date:
     # ========================================================
     # ROW 2: PREDIKSI 72 JAM
     # ========================================================
-    st.markdown('<div class="card"><div class="card-header">🔮 Prediksi Beban 72 Jam ke Depan</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="card"><div class="card-header">Prediksi Beban 72 Jam ke Depan</div></div>', unsafe_allow_html=True)
     
     fc_main["timestamp"] = pd.to_datetime(fc_main["timestamp"]) if "timestamp" in fc_main.columns else pd.to_datetime(fc_main["datetime"])
     if "timestamp" not in fc_main.columns and "datetime" in fc_main.columns:
         fc_main = fc_main.rename(columns={"datetime": "timestamp"})
     
-    # Filter data untuk menampilkan dari start sampai end (termasuk akhir hari end_date)
     fc_filtered = fc_main[(fc_main["timestamp"] >= period_start) & (fc_main["timestamp"] <= period_end)]
 
     if not fc_filtered.empty:
@@ -375,7 +380,6 @@ if selected_feeder and start_date and end_date:
                 if "datetime" not in df_fc.columns and "timestamp" in df_fc.columns:
                     df_fc = df_fc.rename(columns={"timestamp": "datetime"})
                 
-                # Filter untuk menampilkan sampai end_date
                 df_fc["datetime"] = pd.to_datetime(df_fc["datetime"])
                 df_fc_filtered = df_fc[(df_fc["datetime"] >= period_start) & (df_fc["datetime"] <= period_end)]
                 
