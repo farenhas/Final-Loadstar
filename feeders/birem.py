@@ -55,7 +55,7 @@ def create_birem_features(datetime_index, historical_data=None):
 
     # Drop probability detection (based on last 7 days)
     if historical_data is not None and len(historical_data) > 24:
-        recent_data = historical_data.tail(168)
+        recent_data = historical_data.tail(1440)
         roll_med = recent_data.rolling(24, min_periods=1).median().iloc[-1]
         recent_drop_rate = ((recent_data / roll_med) < 0.6).mean()
     else:

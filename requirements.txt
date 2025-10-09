@@ -8,3 +8,4 @@ joblib
 pmdarima
 mysql-connector-python
 sqlalchemy
+pymysql
