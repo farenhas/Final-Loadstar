@@ -13,7 +13,7 @@ from feeders import birem, gegger, labang, tragah, torjun
 # ============================================================
 st.set_page_config(page_title="Load Monitor & Forecast System", layout="wide")
 
-logo_path = Path(r"D:\PLN-Loadstar\loadstar.png")
+logo_path = Path(r"D:\Magang\ForecastArus\loadstar.png")
 
 def get_base64_logo(img_path):
     with open(img_path, "rb") as f:
@@ -43,7 +43,7 @@ st.markdown(f"""
     align-items: center;
 }}
 .logo-section img {{
-    height: 45px;
+    height: 90px;
     width: auto;
     margin-right: 1.2rem;
 }}
@@ -56,7 +56,7 @@ st.markdown(f"""
 .card {{
     background: white;
     border: none;
-    border-radius: 0px; /* ✅ Sudut lancip */
+    border-radius: 0px;
     box-shadow: 0 2px 12px rgba(0,0,0,0.08);
     margin-bottom: 1.5rem;
     overflow: hidden;
@@ -105,6 +105,43 @@ st.markdown(f"""
     min-width: 30px;
     text-align: center;
     margin-right: 1rem;
+}}
+.data-table {{
+    font-size: 0.85rem;
+    max-height: 320px;
+    overflow-y: auto;
+}}
+.data-table table {{
+    width: 100%;
+    border-collapse: collapse;
+}}
+.data-table th {{
+    background-color: #f8f9fa;
+    color: #2c3e50;
+    font-weight: 600;
+    padding: 0.6rem;
+    text-align: left;
+    position: sticky;
+    top: 0;
+    border-bottom: 2px solid #dee2e6;
+}}
+.data-table td {{
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid #f0f0f0;
+}}
+.data-table tr:hover {{
+    background-color: #f8f9fa;
+}}
+.high-load {{
+    color: #dc3545;
+    font-weight: 600;
+}}
+.medium-load {{
+    color: #ffc107;
+    font-weight: 600;
+}}
+.low-load {{
+    color: #28a745;
 }}
 #MainMenu {{visibility: hidden;}}
 footer {{visibility: hidden;}}
@@ -200,6 +237,21 @@ def call_forecast_module(name, historical_df, start_datetime):
         return None
     return normalize_forecast_df(raw_fc)
 
+def resample_to_hourly(df, datetime_col='datetime', value_col='forecast'):
+    """Resample data to hourly frequency"""
+    if df is None or df.empty:
+        return None
+    df = df.copy()
+    df[datetime_col] = pd.to_datetime(df[datetime_col])
+    df = df.set_index(datetime_col)
+    df_hourly = df[value_col].resample('H').mean().reset_index()
+    df_hourly.columns = [datetime_col, value_col]
+    return df_hourly
+
+def generate_hour_options():
+    """Generate hourly time options from 00:00 to 23:00"""
+    return [time(h, 0) for h in range(24)]
+
 # ============================================================
 # INPUT
 # ============================================================
@@ -208,13 +260,20 @@ if not unique_feeders:
     st.error("Tidak ada feeder ditemukan di database.")
     st.stop()
 
-col1, col2, col3 = st.columns([2, 1, 1])
+col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 1])
+
+hour_options = generate_hour_options()
+
 with col1:
     selected_feeder = st.selectbox("Select Feeder", unique_feeders)
 with col2:
     start_date = st.date_input("Tanggal Mulai Pekerjaan")
 with col3:
+    start_time = st.selectbox("Jam Mulai", hour_options, index=0, format_func=lambda x: x.strftime("%H:%M"))
+with col4:
     end_date = st.date_input("Tanggal Selesai Pekerjaan")
+with col5:
+    end_time = st.selectbox("Jam Selesai", hour_options, index=23, format_func=lambda x: x.strftime("%H:%M"))
 
 # ============================================================
 # FORECAST
@@ -230,8 +289,12 @@ if selected_feeder and start_date and end_date:
     df_hist["timestamp"] = pd.to_datetime(df_hist["timestamp"])
     last_data_time = df_hist["timestamp"].max()
 
-    period_start = pd.to_datetime(datetime.combine(start_date, time.min))
-    period_end = pd.to_datetime(datetime.combine(end_date, time.max))
+    period_start = pd.to_datetime(datetime.combine(start_date, start_time))
+    period_end = pd.to_datetime(datetime.combine(end_date, end_time))
+
+    if period_end <= period_start:
+        st.error("❌ Tanggal/Jam selesai harus lebih besar dari mulai.")
+        st.stop()
 
     if period_end > (last_data_time + timedelta(hours=FORECAST_HOURS)):
         st.error("❌ Periode melebihi jangkauan forecast (72 jam).")
@@ -242,6 +305,20 @@ if selected_feeder and start_date and end_date:
     if fc_main is None or fc_main.empty:
         st.warning(f"Feeder '{selected_feeder}' belum memiliki model forecast.")
         st.stop()
+
+    # Normalize column names
+    if "datetime" in fc_main.columns:
+        fc_main = fc_main.rename(columns={"datetime": "timestamp"})
+    fc_main["timestamp"] = pd.to_datetime(fc_main["timestamp"])
+
+    # Resample to hourly
+    fc_main_hourly = resample_to_hourly(fc_main, 'timestamp', 'forecast')
+    
+    # Filter based on user input
+    fc_filtered = fc_main_hourly[
+        (fc_main_hourly["timestamp"] >= period_start) & 
+        (fc_main_hourly["timestamp"] <= period_end)
+    ].copy()
 
     # ========================================================
     # ROW 1: BEBAN REAL-TIME & REKOMENDASI MANUVER
@@ -282,10 +359,6 @@ if selected_feeder and start_date and end_date:
             recommendations_html += '<p class="text-muted">Feeder ini tidak memiliki pasangan transfer.</p>'
         else:
             partner_results = []
-            fc_main_temp = fc_main.copy()
-            fc_main_temp = fc_main_temp.rename(columns={"datetime": "timestamp"}) if "datetime" in fc_main_temp.columns else fc_main_temp
-            fc_main_temp["timestamp"] = pd.to_datetime(fc_main_temp["timestamp"], errors="coerce")
-            fc_main_temp = fc_main_temp[(fc_main_temp["timestamp"] >= period_start) & (fc_main_temp["timestamp"] <= period_end)]
 
             for partner in partner_list:
                 df_partner = load_data_from_db(partner)
@@ -295,11 +368,20 @@ if selected_feeder and start_date and end_date:
                 if fc_partner is None or fc_partner.empty:
                     continue
 
-                fc_partner = fc_partner.rename(columns={"datetime": "timestamp"}) if "datetime" in fc_partner.columns else fc_partner
-                fc_partner["timestamp"] = pd.to_datetime(fc_partner["timestamp"], errors="coerce")
-                fc_partner = fc_partner[(fc_partner["timestamp"] >= period_start) & (fc_partner["timestamp"] <= period_end)]
+                if "datetime" in fc_partner.columns:
+                    fc_partner = fc_partner.rename(columns={"datetime": "timestamp"})
+                fc_partner["timestamp"] = pd.to_datetime(fc_partner["timestamp"])
+                
+                # Resample to hourly
+                fc_partner_hourly = resample_to_hourly(fc_partner, 'timestamp', 'forecast')
+                
+                # Filter based on user input
+                fc_partner_filtered = fc_partner_hourly[
+                    (fc_partner_hourly["timestamp"] >= period_start) & 
+                    (fc_partner_hourly["timestamp"] <= period_end)
+                ]
 
-                merged = pd.merge(fc_main_temp, fc_partner, on="timestamp", suffixes=(f"_{selected_feeder}", f"_{partner}"))
+                merged = pd.merge(fc_filtered, fc_partner_filtered, on="timestamp", suffixes=(f"_{selected_feeder}", f"_{partner}"))
                 if merged.empty:
                     continue
 
@@ -313,7 +395,7 @@ if selected_feeder and start_date and end_date:
                 else:
                     status, icon, label = "danger", "⨂", "Tidak Aman"
 
-                partner_results.append((partner, max_load, status, icon, label, fc_partner))
+                partner_results.append((partner, max_load, status, icon, label, fc_partner_filtered))
 
             partner_results = sorted(partner_results, key=lambda x: x[1])
             for partner, max_load, status, icon, label, _ in partner_results:
@@ -331,66 +413,86 @@ if selected_feeder and start_date and end_date:
         st.markdown(recommendations_html, unsafe_allow_html=True)
 
     # ========================================================
-    # ROW 2: PREDIKSI 72 JAM
+    # ROW 2: PREDIKSI 72 JAM + TABEL RINCIAN
     # ========================================================
-    st.markdown('<div class="card"><div class="card-header">Prediksi Beban 72 Jam ke Depan</div></div>', unsafe_allow_html=True)
+    col_chart, col_table = st.columns([2, 1])
     
-    fc_main["timestamp"] = pd.to_datetime(fc_main["timestamp"]) if "timestamp" in fc_main.columns else pd.to_datetime(fc_main["datetime"])
-    if "timestamp" not in fc_main.columns and "datetime" in fc_main.columns:
-        fc_main = fc_main.rename(columns={"datetime": "timestamp"})
-    
-    fc_filtered = fc_main[(fc_main["timestamp"] >= period_start) & (fc_main["timestamp"] <= period_end)]
+    with col_chart:
+        st.markdown('<div class="card"><div class="card-header">Prediksi Beban 72 Jam ke Depan</div></div>', unsafe_allow_html=True)
+        
+        if not fc_filtered.empty:
+            fig_fc = go.Figure()
+            fig_fc.add_trace(go.Scatter(
+                x=fc_filtered["timestamp"],
+                y=fc_filtered["forecast"].round(2),
+                mode="lines+markers",
+                line=dict(color="#2ecc71", width=3),
+                marker=dict(size=6, color="#2ecc71"),
+                fill='tozeroy',
+                fillcolor='rgba(46,204,113,0.15)'
+            ))
+            fig_fc.add_hline(y=WARNING_THRESHOLD, line=dict(color="#e74c3c", dash="dash", width=2),
+                             annotation_text="Batas Aman (320 A)", annotation_position="top right")
+            fig_fc.update_layout(
+                height=350,
+                template="plotly_white",
+                margin=dict(l=0, r=0, t=0, b=0),
+                xaxis_title="Waktu",
+                yaxis_title="Arus (A)",
+                xaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickformat="%d %b\n%H:%M"),
+                yaxis=dict(showgrid=True, gridcolor='#f0f0f0'),
+                plot_bgcolor='white',
+                paper_bgcolor='white'
+            )
+            st.plotly_chart(fig_fc, use_container_width=True)
+        else:
+            st.warning("Tidak ada data forecast dalam rentang tanggal yang dipilih.")
 
-    if not fc_filtered.empty:
-        fig_fc = go.Figure()
-        fig_fc.add_trace(go.Scatter(
-            x=fc_filtered["timestamp"],
-            y=fc_filtered["forecast"].round(2),
-            mode="lines",
-            line=dict(color="#2ecc71", width=3),
-            fill='tozeroy',
-            fillcolor='rgba(46,204,113,0.15)'
-        ))
-        fig_fc.add_hline(y=WARNING_THRESHOLD, line=dict(color="#e74c3c", dash="dash", width=2),
-                         annotation_text="Batas Aman (320 A)", annotation_position="top right")
-        fig_fc.update_layout(
-            height=350,
-            template="plotly_white",
-            margin=dict(l=0, r=0, t=0, b=0),
-            xaxis_title="Waktu",
-            yaxis_title="Arus (A)",
-            xaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickformat="%d %b\n%H:%M"),
-            yaxis=dict(showgrid=True, gridcolor='#f0f0f0'),
-            plot_bgcolor='white',
-            paper_bgcolor='white'
-        )
-        st.plotly_chart(fig_fc, use_container_width=True)
-    else:
-        st.warning("Tidak ada data forecast dalam rentang tanggal yang dipilih.")
-
+    with col_table:
+        if not fc_filtered.empty:
+            table_html = '<div class="card"><div class="card-header">Rincian Prediksi Per Jam</div><div class="card-body"><div class="data-table"><table>'
+            table_html += '<thead><tr><th>Waktu</th><th>Arus (A)</th><th>Status</th></tr></thead><tbody>'
+            
+            for _, row in fc_filtered.iterrows():
+                dt = row["timestamp"]
+                forecast_val = round(row["forecast"], 2)
+                
+                if forecast_val >= 400:
+                    status_class = "high-load"
+                    status_text = "⚠ Bahaya"
+                elif forecast_val >= 320:
+                    status_class = "medium-load"
+                    status_text = "⚡ Tinggi"
+                else:
+                    status_class = "low-load"
+                    status_text = "✓ Normal"
+                
+                time_str = dt.strftime("%d %b %H:%M")
+                table_html += f'<tr><td>{time_str}</td><td class="{status_class}">{forecast_val}</td><td><small>{status_text}</small></td></tr>'
+            
+            table_html += '</tbody></table></div></div></div>'
+            st.markdown(table_html, unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="card"><div class="card-header">Rincian Prediksi Per Jam</div><div class="card-body"><p class="text-muted">Tidak ada data untuk ditampilkan</p></div></div>', unsafe_allow_html=True)
+            
     # ========================================================
     # ROW 3: DETAIL PREDIKSI FEEDER PASANGAN
     # ========================================================
     if partner_results:
-        st.markdown('<div class="card"><div class="card-header">📈 Detail Prediksi Feeder Pasangan</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="card"><div class="card-header">Prediksi Feeder Manuver</div></div>', unsafe_allow_html=True)
         
         cols = st.columns(2)
         for idx, (partner, max_load, status, icon, label, df_fc) in enumerate(partner_results):
             with cols[idx % 2]:
-                if "datetime" not in df_fc.columns and "timestamp" in df_fc.columns:
-                    df_fc = df_fc.rename(columns={"timestamp": "datetime"})
-                
-                df_fc["datetime"] = pd.to_datetime(df_fc["datetime"])
-                df_fc_filtered = df_fc[(df_fc["datetime"] >= period_start) & (df_fc["datetime"] <= period_end)]
-                
                 color = "#28a745" if status == "safe" else "#ffc107" if status == "warning" else "#dc3545"
                 
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(
-                    x=df_fc_filtered["datetime"],
-                    y=df_fc_filtered["forecast"].round(2),
-                    mode="lines",
+                    x=df_fc["timestamp"],
+                    y=df_fc["forecast"].round(2),
+                    mode="lines+markers",
                     line=dict(color=color, width=2.5),
+                    marker=dict(size=5, color=color),
                     fill='tozeroy',
                     fillcolor=f'rgba(0,0,0,0.05)'
                 ))
