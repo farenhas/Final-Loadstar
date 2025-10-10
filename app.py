@@ -22,18 +22,21 @@ def get_base64_logo(img_path):
 logo_base64 = get_base64_logo(logo_path) if logo_path.exists() else ""
 
 # ============================================================
-# CUSTOM CSS WITH BOOTSTRAP - HEADER & BACKGROUND ONLY
+# CUSTOM CSS WITH BOOTSTRAP
 # ============================================================
 st.markdown(f"""
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.1.3/dist/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+* {{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}}
 .stApp {{
     background-color: #e8ecef !important;
 }}
 .main-header {{
     background-color: #ffffff;
-    padding: 1.2rem 2.5rem;
-    margin: -50px -80px 2rem -80px;
+    margin: -50px -80px 0 -80px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     position: sticky;
     z-index: 999;
@@ -43,47 +46,56 @@ st.markdown(f"""
     align-items: center;
 }}
 .logo-section img {{
-    height: 90px;
+    height: 75px;
     width: auto;
-    margin-right: 1.2rem;
+    margin-right: 1rem;
 }}
 .dashboard-title {{
-    font-size: 1.75rem;
+    font-size: 1.6rem;
     font-weight: 600;
     color: #2c3e50;
     margin: 0;
+    letter-spacing: -0.3px;
+}}
+.filter-container {{
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    margin-bottom: 1rem;
 }}
 .card {{
     background: white;
     border: none;
-    border-radius: 0px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-    margin-bottom: 1.5rem;
+    border-radius: 6px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    margin-bottom: 1rem;
     overflow: hidden;
 }}
 .card-header {{
     background: #1a94aa;
     color: white;
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 600;
-    padding: 1rem 1.5rem;
     border: none;
-    border-radius: 0px; 
+    border-radius: 6px 6px 0 0;
+    letter-spacing: -0.2px;
 }}
 .card-body {{
-    padding: 1.5rem;
-    border-radius: 0px; 
+    padding: 1.2rem;
+    border-radius: 0 0 6px 6px;
 }}
 .rec-card {{
-    border-radius: 0px; 
-    margin-bottom: 0.75rem;
+    border-radius: 6px;
+    margin-bottom: 0.65rem;
     display: flex;
     align-items: center;
-    padding: 0.75rem 1rem;
-    transition: transform 0.2s;
+    padding: 0.7rem 1rem;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
 }}
 .rec-card:hover {{
-    transform: translateX(5px);
+    transform: translateX(4px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }}
 .rec-card.safe {{
     background-color: #d4edda;
@@ -100,16 +112,49 @@ st.markdown(f"""
     color: #721c24;
     border-left: 4px solid #dc3545;
 }}
-.rec-icon {{
-    font-size: 1.5rem;
-    min-width: 30px;
-    text-align: center;
-    margin-right: 1rem;
+.rec-content {{
+    flex: 1;
+}}
+.rec-title {{
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 0.15rem;
+}}
+.rec-subtitle {{
+    font-size: 0.8rem;
+    opacity: 0.85;
+}}
+.recommendations-scroll {{
+    max-height: 280px;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}}
+.recommendations-scroll::-webkit-scrollbar {{
+    width: 6px;
+}}
+.recommendations-scroll::-webkit-scrollbar-track {{
+    background: #f1f1f1;
+    border-radius: 10px;
+}}
+.recommendations-scroll::-webkit-scrollbar-thumb {{
+    background: #1a94aa;
+    border-radius: 10px;
 }}
 .data-table {{
-    font-size: 0.85rem;
-    max-height: 320px;
+    font-size: 0.8rem;
+    max-height: 300px;
     overflow-y: auto;
+}}
+.data-table::-webkit-scrollbar {{
+    width: 6px;
+}}
+.data-table::-webkit-scrollbar-track {{
+    background: #f1f1f1;
+    border-radius: 10px;
+}}
+.data-table::-webkit-scrollbar-thumb {{
+    background: #1a94aa;
+    border-radius: 10px;
 }}
 .data-table table {{
     width: 100%;
@@ -119,18 +164,44 @@ st.markdown(f"""
     background-color: #f8f9fa;
     color: #2c3e50;
     font-weight: 600;
-    padding: 0.6rem;
+    padding: 0.65rem 0.75rem;
     text-align: left;
     position: sticky;
     top: 0;
     border-bottom: 2px solid #dee2e6;
+    font-size: 0.8rem;
+    z-index: 10;
 }}
 .data-table td {{
-    padding: 0.5rem 0.6rem;
+    padding: 0.55rem 0.75rem;
     border-bottom: 1px solid #f0f0f0;
 }}
-.data-table tr:hover {{
-    background-color: #f8f9fa;
+.data-table tbody tr:nth-child(even) {{
+    background-color: #f9fafb;
+}}
+.data-table tbody tr:hover {{
+    background-color: #f1f5f9;
+    transition: background-color 0.15s ease;
+}}
+.status-badge {{
+    display: inline-block;
+    padding: 0.25rem 0.65rem;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+}}
+.badge-safe {{
+    background-color: #d4edda;
+    color: #155724;
+}}
+.badge-warning {{
+    background-color: #fff3cd;
+    color: #856404;
+}}
+.badge-danger {{
+    background-color: #f8d7da;
+    color: #721c24;
 }}
 .high-load {{
     color: #dc3545;
@@ -142,6 +213,19 @@ st.markdown(f"""
 }}
 .low-load {{
     color: #28a745;
+    font-weight: 500;
+}}
+.peak-badge {{
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(255,255,255,0.95);
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    z-index: 10;
 }}
 #MainMenu {{visibility: hidden;}}
 footer {{visibility: hidden;}}
@@ -260,6 +344,7 @@ if not unique_feeders:
     st.error("Tidak ada feeder ditemukan di database.")
     st.stop()
 
+st.markdown('<div class="filter-container">', unsafe_allow_html=True)
 col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 1])
 
 hour_options = generate_hour_options()
@@ -267,13 +352,15 @@ hour_options = generate_hour_options()
 with col1:
     selected_feeder = st.selectbox("Select Feeder", unique_feeders)
 with col2:
-    start_date = st.date_input("Tanggal Mulai Pekerjaan")
+    start_date = st.date_input("Tanggal Mulai")
 with col3:
     start_time = st.selectbox("Jam Mulai", hour_options, index=0, format_func=lambda x: x.strftime("%H:%M"))
 with col4:
-    end_date = st.date_input("Tanggal Selesai Pekerjaan")
+    end_date = st.date_input("Tanggal Selesai")
 with col5:
     end_time = st.selectbox("Jam Selesai", hour_options, index=23, format_func=lambda x: x.strftime("%H:%M"))
+
+st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================================================
 # FORECAST
@@ -293,11 +380,11 @@ if selected_feeder and start_date and end_date:
     period_end = pd.to_datetime(datetime.combine(end_date, end_time))
 
     if period_end <= period_start:
-        st.error("❌ Tanggal/Jam selesai harus lebih besar dari mulai.")
+        st.error("Tanggal/Jam selesai harus lebih besar dari mulai.")
         st.stop()
 
     if period_end > (last_data_time + timedelta(hours=FORECAST_HOURS)):
-        st.error("❌ Periode melebihi jangkauan forecast (72 jam).")
+        st.error("Periode melebihi jangkauan forecast (72 jam).")
         st.stop()
 
     df_hist_display = df_hist[df_hist["timestamp"] >= (last_data_time - timedelta(days=HIST_DAYS))].copy()
@@ -338,9 +425,17 @@ if selected_feeder and start_date and end_date:
             fillcolor='rgba(52,152,219,0.15)'
         ))
         fig_hist.update_layout(
-            height=320,
+            height=280,
+            title=dict(
+                text=f"{selected_feeder.upper()}",
+                font=dict(size=12, color="#3498db", weight=600),
+                x=0.02,
+                y=0.98,
+                xanchor='left',
+                yanchor='top'
+            ),
             template="plotly_white",
-            margin=dict(l=0, r=0, t=0, b=0),
+            margin=dict(l=0, r=0, t=35, b=0),
             xaxis_title="Waktu",
             yaxis_title="Arus (A)",
             xaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickformat="%d %b\n%H:%M"),
@@ -353,7 +448,7 @@ if selected_feeder and start_date and end_date:
     with col_right:
         partner_list = feeder_pairs.get(selected_feeder.lower(), [])
         
-        recommendations_html = '<div class="card"><div class="card-header">Rekomendasi Manuver</div><div class="card-body">'
+        recommendations_html = '<div class="card"><div class="card-header">Rekomendasi Manuver</div><div class="card-body"><div class="recommendations-scroll">'
         
         if not partner_list:
             recommendations_html += '<p class="text-muted">Feeder ini tidak memiliki pasangan transfer.</p>'
@@ -389,27 +484,26 @@ if selected_feeder and start_date and end_date:
                 max_load = round(merged["total_transfer"].max(), 2)
 
                 if max_load < 320:
-                    status, icon, label = "safe", "✓", "Aman"
+                    status, label = "safe", "Aman"
                 elif 320 <= max_load < 400:
-                    status, icon, label = "warning", "⚠", "Mendekati Batas"
+                    status, label = "warning", "Mendekati Batas"
                 else:
-                    status, icon, label = "danger", "⨂", "Tidak Aman"
+                    status, label = "danger", "Tidak Aman"
 
-                partner_results.append((partner, max_load, status, icon, label, fc_partner_filtered))
+                partner_results.append((partner, max_load, status, label, fc_partner_filtered))
 
             partner_results = sorted(partner_results, key=lambda x: x[1])
-            for partner, max_load, status, icon, label, _ in partner_results:
+            for partner, max_load, status, label, _ in partner_results:
                 recommendations_html += f"""
                 <div class="rec-card {status}">
-                    <div class="rec-icon">{icon}</div>
-                    <div>
-                        <strong>{partner.upper()}</strong><br>
-                        <small>{label} (Maks: {max_load} A)</small>
+                    <div class="rec-content">
+                        <div class="rec-title">{partner.upper()}</div>
+                        <div class="rec-subtitle">{label} (Maks: {max_load} A)</div>
                     </div>
                 </div>
                 """
         
-        recommendations_html += '</div></div>'
+        recommendations_html += '</div></div></div>'
         st.markdown(recommendations_html, unsafe_allow_html=True)
 
     # ========================================================
@@ -427,16 +521,24 @@ if selected_feeder and start_date and end_date:
                 y=fc_filtered["forecast"].round(2),
                 mode="lines+markers",
                 line=dict(color="#2ecc71", width=3),
-                marker=dict(size=6, color="#2ecc71"),
+                marker=dict(size=5, color="#2ecc71"),
                 fill='tozeroy',
                 fillcolor='rgba(46,204,113,0.15)'
             ))
             fig_fc.add_hline(y=WARNING_THRESHOLD, line=dict(color="#e74c3c", dash="dash", width=2),
                              annotation_text="Batas Aman (320 A)", annotation_position="top right")
             fig_fc.update_layout(
-                height=350,
+                height=300,
+                title=dict(
+                    text=f"{selected_feeder.upper()}",
+                    font=dict(size=12, color="#2ecc71", weight=600),
+                    x=0.02,
+                    y=0.98,
+                    xanchor='left',
+                    yanchor='top'
+                ),
                 template="plotly_white",
-                margin=dict(l=0, r=0, t=0, b=0),
+                margin=dict(l=0, r=0, t=35, b=0),
                 xaxis_title="Waktu",
                 yaxis_title="Arus (A)",
                 xaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickformat="%d %b\n%H:%M"),
@@ -459,31 +561,35 @@ if selected_feeder and start_date and end_date:
                 
                 if forecast_val >= 400:
                     status_class = "high-load"
-                    status_text = "⚠ Bahaya"
+                    badge_class = "badge-danger"
+                    status_text = "Bahaya"
                 elif forecast_val >= 320:
                     status_class = "medium-load"
-                    status_text = "⚡ Tinggi"
+                    badge_class = "badge-warning"
+                    status_text = "Tinggi"
                 else:
                     status_class = "low-load"
-                    status_text = "✓ Normal"
+                    badge_class = "badge-safe"
+                    status_text = "Normal"
                 
                 time_str = dt.strftime("%d %b %H:%M")
-                table_html += f'<tr><td>{time_str}</td><td class="{status_class}">{forecast_val}</td><td><small>{status_text}</small></td></tr>'
+                table_html += f'<tr><td>{time_str}</td><td class="{status_class}">{forecast_val}</td><td><span class="status-badge {badge_class}">{status_text}</span></td></tr>'
             
             table_html += '</tbody></table></div></div></div>'
             st.markdown(table_html, unsafe_allow_html=True)
         else:
             st.markdown('<div class="card"><div class="card-header">Rincian Prediksi Per Jam</div><div class="card-body"><p class="text-muted">Tidak ada data untuk ditampilkan</p></div></div>', unsafe_allow_html=True)
-            
+
     # ========================================================
     # ROW 3: DETAIL PREDIKSI FEEDER PASANGAN
     # ========================================================
     if partner_results:
         st.markdown('<div class="card"><div class="card-header">Prediksi Feeder Manuver</div></div>', unsafe_allow_html=True)
         
-        cols = st.columns(2)
-        for idx, (partner, max_load, status, icon, label, df_fc) in enumerate(partner_results):
-            with cols[idx % 2]:
+        # Use 3 columns for better space utilization
+        cols = st.columns(3)
+        for idx, (partner, max_load, status, label, df_fc) in enumerate(partner_results):
+            with cols[idx % 3]:
                 color = "#28a745" if status == "safe" else "#ffc107" if status == "warning" else "#dc3545"
                 
                 fig = go.Figure()
@@ -492,20 +598,34 @@ if selected_feeder and start_date and end_date:
                     y=df_fc["forecast"].round(2),
                     mode="lines+markers",
                     line=dict(color=color, width=2.5),
-                    marker=dict(size=5, color=color),
+                    marker=dict(size=4, color=color),
                     fill='tozeroy',
                     fillcolor=f'rgba(0,0,0,0.05)'
                 ))
                 fig.update_layout(
-                    height=240,
-                    title=dict(text=f"{partner.upper()} — {label}", font=dict(size=13, color=color)),
+                    height=220,
+                    title=dict(text=f"{partner.upper()}", font=dict(size=12, color=color, weight=600)),
                     template="plotly_white",
-                    margin=dict(l=0, r=0, t=40, b=0),
+                    margin=dict(l=0, r=0, t=35, b=0),
                     xaxis_title="Waktu",
                     yaxis_title="Arus (A)",
-                    xaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickformat="%d %b\n%H:%M"),
-                    yaxis=dict(showgrid=True, gridcolor='#f0f0f0'),
+                    xaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickformat="%d %b\n%H:%M", tickfont=dict(size=9)),
+                    yaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickfont=dict(size=9)),
                     plot_bgcolor='white',
-                    paper_bgcolor='white'
+                    paper_bgcolor='white',
+                    annotations=[
+                        dict(
+                            text=f"Peak: {max_load} A",
+                            xref="paper", yref="paper",
+                            x=0.98, y=0.98,
+                            xanchor="right", yanchor="top",
+                            showarrow=False,
+                            bgcolor="rgba(255,255,255,0.95)",
+                            bordercolor=color,
+                            borderwidth=1,
+                            borderpad=4,
+                            font=dict(size=9, color=color, weight=600)
+                        )
+                    ]
                 )
                 st.plotly_chart(fig, use_container_width=True)
