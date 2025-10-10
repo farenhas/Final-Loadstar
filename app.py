@@ -506,126 +506,123 @@ if selected_feeder and start_date and end_date:
         recommendations_html += '</div></div></div>'
         st.markdown(recommendations_html, unsafe_allow_html=True)
 
-    # ========================================================
-    # ROW 2: PREDIKSI 72 JAM + TABEL RINCIAN
-    # ========================================================
-    col_chart, col_table = st.columns([2, 1])
+# ========================================================
+# ROW 2: PREDIKSI 72 JAM + TABEL RINCIAN
+# ========================================================
+col_chart, col_table = st.columns([2, 1])
+
+with col_chart:
+    st.markdown('<div class="card"><div class="card-header">Prediksi Beban 72 Jam ke Depan</div></div>', unsafe_allow_html=True)
     
-    with col_chart:
-        st.markdown('<div class="card"><div class="card-header">Prediksi Beban 72 Jam ke Depan</div></div>', unsafe_allow_html=True)
-        
-        if not fc_filtered.empty:
-            fig_fc = go.Figure()
-            fig_fc.add_trace(go.Scatter(
-                x=fc_filtered["timestamp"],
-                y=fc_filtered["forecast"].round(2),
+    if not fc_filtered.empty:
+        fig_fc = go.Figure()
+        fig_fc.add_trace(go.Scatter(
+            x=fc_filtered["timestamp"],
+            y=fc_filtered["forecast"].round(2),
+            mode="lines+markers",
+            line=dict(color="#2ecc71", width=3),
+            marker=dict(size=5, color="#2ecc71"),
+            fill='tozeroy',
+            fillcolor='rgba(46,204,113,0.15)'
+        ))
+        fig_fc.add_hline(
+            y=320,
+            line=dict(color="#e74c3c", dash="dash", width=2),
+            annotation_text="Batas Aman (320 A)",
+            annotation_position="top right"
+        )
+        fig_fc.update_layout(
+            height=300,
+            title=dict(
+                text=f"{selected_feeder.upper()}",
+                font=dict(size=12, color="#2ecc71", weight=600),
+                x=0.02,
+                y=0.98,
+                xanchor='left',
+                yanchor='top'
+            ),
+            template="plotly_white",
+            margin=dict(l=0, r=0, t=35, b=0),
+            xaxis_title="Waktu",
+            yaxis_title="Arus (A)",
+            xaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickformat="%d %b\n%H:%M"),
+            yaxis=dict(showgrid=True, gridcolor='#f0f0f0'),
+            plot_bgcolor='white',
+            paper_bgcolor='white'
+        )
+        st.plotly_chart(fig_fc, use_container_width=True)
+    else:
+        st.warning("Tidak ada data forecast dalam rentang tanggal yang dipilih.")
+
+with col_table:
+    if not fc_filtered.empty:
+        table_html = (
+            '<div class="card">'
+            '<div class="card-header">Rincian Prediksi Per Jam</div>'
+            '<div class="card-body"><div class="data-table"><table>'
+            '<thead><tr><th>Waktu</th><th>Arus (A)</th></tr></thead><tbody>'
+        )
+
+        for _, row in fc_filtered.iterrows():
+            dt = row["timestamp"]
+            forecast_val = round(row["forecast"], 2)
+            time_str = dt.strftime("%d %b %H:%M")
+            table_html += f'<tr><td>{time_str}</td><td>{forecast_val}</td></tr>'
+
+        table_html += '</tbody></table></div></div></div>'
+        st.markdown(table_html, unsafe_allow_html=True)
+    else:
+        st.markdown(
+            '<div class="card"><div class="card-header">Rincian Prediksi Per Jam</div>'
+            '<div class="card-body"><p class="text-muted">Tidak ada data untuk ditampilkan</p></div></div>',
+            unsafe_allow_html=True
+        )
+
+# ========================================================
+# ROW 3: DETAIL PREDIKSI FEEDER PASANGAN
+# ========================================================
+if partner_results:
+    st.markdown('<div class="card"><div class="card-header">Prediksi Feeder Manuver</div></div>', unsafe_allow_html=True)
+    
+    cols = st.columns(3)
+    for idx, (partner, max_load, status, label, df_fc) in enumerate(partner_results):
+        with cols[idx % 3]:
+            color = "#28a745" if status == "safe" else "#ffc107" if status == "warning" else "#dc3545"
+            
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=df_fc["timestamp"],
+                y=df_fc["forecast"].round(2),
                 mode="lines+markers",
-                line=dict(color="#2ecc71", width=3),
-                marker=dict(size=5, color="#2ecc71"),
+                line=dict(color=color, width=2.5),
+                marker=dict(size=4, color=color),
                 fill='tozeroy',
-                fillcolor='rgba(46,204,113,0.15)'
+                fillcolor='rgba(0,0,0,0.05)'
             ))
-            fig_fc.add_hline(y=WARNING_THRESHOLD, line=dict(color="#e74c3c", dash="dash", width=2),
-                             annotation_text="Batas Aman (320 A)", annotation_position="top right")
-            fig_fc.update_layout(
-                height=300,
-                title=dict(
-                    text=f"{selected_feeder.upper()}",
-                    font=dict(size=12, color="#2ecc71", weight=600),
-                    x=0.02,
-                    y=0.98,
-                    xanchor='left',
-                    yanchor='top'
-                ),
+            fig.update_layout(
+                height=220,
+                title=dict(text=f"{partner.upper()}", font=dict(size=12, color=color, weight=600)),
                 template="plotly_white",
                 margin=dict(l=0, r=0, t=35, b=0),
                 xaxis_title="Waktu",
                 yaxis_title="Arus (A)",
-                xaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickformat="%d %b\n%H:%M"),
-                yaxis=dict(showgrid=True, gridcolor='#f0f0f0'),
+                xaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickformat="%d %b\n%H:%M", tickfont=dict(size=9)),
+                yaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickfont=dict(size=9)),
                 plot_bgcolor='white',
-                paper_bgcolor='white'
+                paper_bgcolor='white',
+                annotations=[
+                    dict(
+                        text=f"Peak: {max_load} A",
+                        xref="paper", yref="paper",
+                        x=0.98, y=0.98,
+                        xanchor="right", yanchor="top",
+                        showarrow=False,
+                        bgcolor="rgba(255,255,255,0.95)",
+                        bordercolor=color,
+                        borderwidth=1,
+                        borderpad=4,
+                        font=dict(size=9, color=color, weight=600)
+                    )
+                ]
             )
-            st.plotly_chart(fig_fc, use_container_width=True)
-        else:
-            st.warning("Tidak ada data forecast dalam rentang tanggal yang dipilih.")
-
-    with col_table:
-        if not fc_filtered.empty:
-            table_html = '<div class="card"><div class="card-header">Rincian Prediksi Per Jam</div><div class="card-body"><div class="data-table"><table>'
-            table_html += '<thead><tr><th>Waktu</th><th>Arus (A)</th><th>Status</th></tr></thead><tbody>'
-            
-            for _, row in fc_filtered.iterrows():
-                dt = row["timestamp"]
-                forecast_val = round(row["forecast"], 2)
-                
-                if forecast_val >= 400:
-                    status_class = "high-load"
-                    badge_class = "badge-danger"
-                    status_text = "Bahaya"
-                elif forecast_val >= 320:
-                    status_class = "medium-load"
-                    badge_class = "badge-warning"
-                    status_text = "Tinggi"
-                else:
-                    status_class = "low-load"
-                    badge_class = "badge-safe"
-                    status_text = "Normal"
-                
-                time_str = dt.strftime("%d %b %H:%M")
-                table_html += f'<tr><td>{time_str}</td><td class="{status_class}">{forecast_val}</td><td><span class="status-badge {badge_class}">{status_text}</span></td></tr>'
-            
-            table_html += '</tbody></table></div></div></div>'
-            st.markdown(table_html, unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="card"><div class="card-header">Rincian Prediksi Per Jam</div><div class="card-body"><p class="text-muted">Tidak ada data untuk ditampilkan</p></div></div>', unsafe_allow_html=True)
-
-    # ========================================================
-    # ROW 3: DETAIL PREDIKSI FEEDER PASANGAN
-    # ========================================================
-    if partner_results:
-        st.markdown('<div class="card"><div class="card-header">Prediksi Feeder Manuver</div></div>', unsafe_allow_html=True)
-        
-        # Use 3 columns for better space utilization
-        cols = st.columns(3)
-        for idx, (partner, max_load, status, label, df_fc) in enumerate(partner_results):
-            with cols[idx % 3]:
-                color = "#28a745" if status == "safe" else "#ffc107" if status == "warning" else "#dc3545"
-                
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=df_fc["timestamp"],
-                    y=df_fc["forecast"].round(2),
-                    mode="lines+markers",
-                    line=dict(color=color, width=2.5),
-                    marker=dict(size=4, color=color),
-                    fill='tozeroy',
-                    fillcolor=f'rgba(0,0,0,0.05)'
-                ))
-                fig.update_layout(
-                    height=220,
-                    title=dict(text=f"{partner.upper()}", font=dict(size=12, color=color, weight=600)),
-                    template="plotly_white",
-                    margin=dict(l=0, r=0, t=35, b=0),
-                    xaxis_title="Waktu",
-                    yaxis_title="Arus (A)",
-                    xaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickformat="%d %b\n%H:%M", tickfont=dict(size=9)),
-                    yaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickfont=dict(size=9)),
-                    plot_bgcolor='white',
-                    paper_bgcolor='white',
-                    annotations=[
-                        dict(
-                            text=f"Peak: {max_load} A",
-                            xref="paper", yref="paper",
-                            x=0.98, y=0.98,
-                            xanchor="right", yanchor="top",
-                            showarrow=False,
-                            bgcolor="rgba(255,255,255,0.95)",
-                            bordercolor=color,
-                            borderwidth=1,
-                            borderpad=4,
-                            font=dict(size=9, color=color, weight=600)
-                        )
-                    ]
-                )
-                st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True)
