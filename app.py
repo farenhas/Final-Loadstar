@@ -300,7 +300,7 @@ def normalize_forecast_df(fc):
             return None
     return df.dropna().sort_values("datetime").reset_index(drop=True)
 
-def call_forecast_module(name, historical_df, start_datetime):
+def call_forecast_module(name, historical_df, start_datetime=None):
     if historical_df is None or historical_df.empty:
         return None
     name = name.lower()
@@ -392,7 +392,7 @@ if selected_feeder and start_date and end_date:
         st.stop()
 
     df_hist_display = df_hist[df_hist["timestamp"] >= (last_data_time - timedelta(days=HIST_DAYS))].copy()
-    fc_main = call_forecast_module(selected_feeder, df_hist, period_start)
+    fc_main = call_forecast_module(selected_feeder, df_hist)
     if fc_main is None or fc_main.empty:
         st.warning(f"Feeder '{selected_feeder}' belum memiliki model forecast.")
         st.stop()
@@ -473,7 +473,7 @@ with col_right:
                 df_partner.dropna(subset=["arus"], inplace=True)
                 df_partner["timestamp"] = pd.to_datetime(df_partner["timestamp"])
                 
-                fc_partner = call_forecast_module(partner, df_partner, period_start)
+                fc_partner = call_forecast_module(partner, df_partner)
                 if fc_partner is None or fc_partner.empty:
                     continue
 
