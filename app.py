@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from pathlib import Path
 import base64
 from utils.db_util import get_unique_feeders, load_data_from_db
-from feeders import birem, gegger, labang, tragah, torjun
+from feeders import birem, gegger, labang, tragah, torjun, galis, unibang
 
 # ============================================================
 # PAGE CONFIG & LOGO
@@ -311,6 +311,8 @@ def call_forecast_module(name, historical_df, start_datetime):
             "labang": labang,
             "tragah": tragah,
             "torjun": torjun,
+            "galis": galis,
+            "unibang": unibang, 
         }
         module = module_map.get(name)
         if not module:
@@ -365,6 +367,8 @@ st.markdown('</div>', unsafe_allow_html=True)
 # ============================================================
 # FORECAST
 # ============================================================
+partner_results = []
+
 if selected_feeder and start_date and end_date:
     df_hist = load_data_from_db(selected_feeder)
     if df_hist.empty:
@@ -407,104 +411,142 @@ if selected_feeder and start_date and end_date:
         (fc_main_hourly["timestamp"] <= period_end)
     ].copy()
 
-    # ========================================================
-    # ROW 1: BEBAN REAL-TIME & REKOMENDASI MANUVER
-    # ========================================================
-    col_left, col_right = st.columns([2, 1])
+# ========================================================
+# ROW 1: BEBAN REAL-TIME & REKOMENDASI MANUVER
+# ========================================================
+col_left, col_right = st.columns([2, 1])
+with col_left:
+    st.markdown('<div class="card"><div class="card-header">Beban Real-Time</div></div>', unsafe_allow_html=True)
+    
+    fig_hist = go.Figure()
+    fig_hist.add_trace(go.Scatter(
+        x=df_hist_display["timestamp"],
+        y=df_hist_display["arus"].round(2),
+        mode="lines",
+        line=dict(color="#3498db", width=2.5),
+        fill='tozeroy',
+        fillcolor='rgba(52,152,219,0.15)'
+    ))
+    fig_hist.update_layout(
+        height=280,
+        title=dict(
+            text=f"{selected_feeder.upper()}",
+            font=dict(size=12, color="#3498db", weight=600),
+            x=0.02,
+            y=0.98,
+            xanchor='left',
+            yanchor='top'
+        ),
+        template="plotly_white",
+        margin=dict(l=0, r=0, t=35, b=0),
+        xaxis_title="Waktu",
+        yaxis_title="Arus (A)",
+        xaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickformat="%d %b\n%H:%M"),
+        yaxis=dict(showgrid=True, gridcolor='#f0f0f0'),
+        plot_bgcolor='white',
+        paper_bgcolor='white'
+    )
+    st.plotly_chart(fig_hist, use_container_width=True)
 
-    with col_left:
-        st.markdown('<div class="card"><div class="card-header">Beban Real-Time</div></div>', unsafe_allow_html=True)
+with col_right:
+    partner_list = feeder_pairs.get(selected_feeder.lower(), [])
+    
+    html_parts = []
+    html_parts.append('<div class="card">')
+    html_parts.append('<div class="card-header">Rekomendasi Manuver</div>')
+    html_parts.append('<div class="card-body">')
+    html_parts.append('<div class="recommendations-scroll">')
+    
+    if not partner_list:
+        html_parts.append('<p class="text-muted">Feeder ini tidak memiliki pasangan transfer.</p>')
+    else:
+        partner_results = []
         
-        fig_hist = go.Figure()
-        fig_hist.add_trace(go.Scatter(
-            x=df_hist_display["timestamp"],
-            y=df_hist_display["arus"].round(2),
-            mode="lines",
-            line=dict(color="#3498db", width=2.5),
-            fill='tozeroy',
-            fillcolor='rgba(52,152,219,0.15)'
-        ))
-        fig_hist.update_layout(
-            height=280,
-            title=dict(
-                text=f"{selected_feeder.upper()}",
-                font=dict(size=12, color="#3498db", weight=600),
-                x=0.02,
-                y=0.98,
-                xanchor='left',
-                yanchor='top'
-            ),
-            template="plotly_white",
-            margin=dict(l=0, r=0, t=35, b=0),
-            xaxis_title="Waktu",
-            yaxis_title="Arus (A)",
-            xaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickformat="%d %b\n%H:%M"),
-            yaxis=dict(showgrid=True, gridcolor='#f0f0f0'),
-            plot_bgcolor='white',
-            paper_bgcolor='white'
-        )
-        st.plotly_chart(fig_hist, use_container_width=True)
-
-    with col_right:
-        partner_list = feeder_pairs.get(selected_feeder.lower(), [])
-        
-        recommendations_html = '<div class="card"><div class="card-header">Rekomendasi Manuver</div><div class="card-body"><div class="recommendations-scroll">'
-        
-        if not partner_list:
-            recommendations_html += '<p class="text-muted">Feeder ini tidak memiliki pasangan transfer.</p>'
-        else:
-            partner_results = []
-
-            for partner in partner_list:
+        for partner in partner_list:
+            try:
                 df_partner = load_data_from_db(partner)
                 if df_partner.empty:
                     continue
+                
+                # Konversi tipe data
+                df_partner["arus"] = pd.to_numeric(df_partner["arus"], errors="coerce")
+                df_partner.dropna(subset=["arus"], inplace=True)
+                df_partner["timestamp"] = pd.to_datetime(df_partner["timestamp"])
+                
                 fc_partner = call_forecast_module(partner, df_partner, period_start)
                 if fc_partner is None or fc_partner.empty:
                     continue
 
+                # Normalisasi kolom
                 if "datetime" in fc_partner.columns:
                     fc_partner = fc_partner.rename(columns={"datetime": "timestamp"})
                 fc_partner["timestamp"] = pd.to_datetime(fc_partner["timestamp"])
                 
                 # Resample to hourly
                 fc_partner_hourly = resample_to_hourly(fc_partner, 'timestamp', 'forecast')
+                if fc_partner_hourly is None or fc_partner_hourly.empty:
+                    continue
                 
                 # Filter based on user input
                 fc_partner_filtered = fc_partner_hourly[
                     (fc_partner_hourly["timestamp"] >= period_start) & 
                     (fc_partner_hourly["timestamp"] <= period_end)
-                ]
+                ].copy()
+                
+                if fc_partner_filtered.empty:
+                    continue
 
-                merged = pd.merge(fc_filtered, fc_partner_filtered, on="timestamp", suffixes=(f"_{selected_feeder}", f"_{partner}"))
+                # Merge dengan forecast utama
+                merged = pd.merge(
+                    fc_filtered,
+                    fc_partner_filtered,
+                    on="timestamp",
+                    suffixes=("_main", "_partner")
+                )
+                
                 if merged.empty:
                     continue
 
-                merged["total_transfer"] = merged[f"forecast_{selected_feeder}"] + merged[f"forecast_{partner}"]
+                # Hitung total transfer
+                merged["total_transfer"] = merged["forecast_main"] + merged["forecast_partner"]
                 max_load = round(merged["total_transfer"].max(), 2)
 
+                # Tentukan status
                 if max_load < 320:
-                    status, label = "safe", "Aman"
+                    status = "safe"
+                    label = "Aman"
                 elif 320 <= max_load < 400:
-                    status, label = "warning", "Mendekati Batas"
+                    status = "warning"
+                    label = "Mendekati Batas"
                 else:
-                    status, label = "danger", "Tidak Aman"
+                    status = "danger"
+                    label = "Tidak Aman"
 
+                # Simpan hasil
                 partner_results.append((partner, max_load, status, label, fc_partner_filtered))
 
-            partner_results = sorted(partner_results, key=lambda x: x[1])
-            for partner, max_load, status, label, _ in partner_results:
-                recommendations_html += f"""
-                <div class="rec-card {status}">
-                    <div class="rec-content">
-                        <div class="rec-title">{partner.upper()}</div>
-                        <div class="rec-subtitle">{label} (Maks: {max_load} A)</div>
-                    </div>
-                </div>
-                """
+                # Build card HTML
+                card_html = '<div class="rec-card ' + status + '">'
+                card_html += '<div class="rec-content">'
+                card_html += '<div class="rec-title">' + partner.upper() + '</div>'
+                card_html += '<div class="rec-subtitle">' + label + ' (Maks: ' + str(max_load) + ' A)</div>'
+                card_html += '</div>'
+                card_html += '</div>'
+                
+                html_parts.append(card_html)
+                
+            except Exception as e:
+                continue
         
-        recommendations_html += '</div></div></div>'
-        st.markdown(recommendations_html, unsafe_allow_html=True)
+        if not partner_results:
+            html_parts.append('<p class="text-muted">Tidak ada rekomendasi yang tersedia untuk periode ini.</p>')
+
+    html_parts.append('</div>')   
+    html_parts.append('</div>')   
+    html_parts.append('</div>')  
+    
+    final_html = ''.join(html_parts)
+    st.markdown(final_html, unsafe_allow_html=True)
 
 # ========================================================
 # ROW 2: PREDIKSI 72 JAM + TABEL RINCIAN

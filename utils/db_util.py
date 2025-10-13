@@ -1,3 +1,4 @@
+
 import mysql.connector
 import pandas as pd
 from config import DB_CONFIG
@@ -24,11 +25,13 @@ def get_unique_feeders():
 def get_historical_data(feeder=None):
     """
     Ambil 32 baris terakhir per feeder dari tabel data_bebanrst,
-    lalu ubah ke format long (jam menjadi row).
-    Jika feeder diberikan, ambil hanya feeder tersebut.
+    hanya kolom jam 01_00–23_00 dan 23_59.
+    Ubah ke format long (time series), lalu ubah jam 23_59 menjadi 00_00 hari berikutnya.
     """
     conn = get_connection()
-    jam_cols = [f"{str(h).zfill(2)}_00" for h in range(24)]
+
+    # Kolom jam dari 01_00–23_00 dan tambahan 23_59
+    jam_cols = [f"{str(h).zfill(2)}_00" for h in range(1, 24)] + ["23_59"]
 
     if feeder and feeder != "All Feeders":
         query = f"""
@@ -45,7 +48,7 @@ def get_historical_data(feeder=None):
         query = f"""
         SELECT tanggal, feeder, {', '.join([f'`{c}`' for c in jam_cols])}
         FROM (
-            SELECT * ,
+            SELECT *,
                    ROW_NUMBER() OVER (PARTITION BY feeder ORDER BY tanggal DESC) AS rn
             FROM data_bebanrst
         ) ranked
@@ -56,23 +59,32 @@ def get_historical_data(feeder=None):
     df = pd.read_sql(query, conn)
     conn.close()
 
+    # Ubah ke format long
     df_long = df.melt(
         id_vars=['tanggal', 'feeder'],
         value_vars=jam_cols,
         var_name='jam', value_name='arus'
     )
 
-    df_long['jam_order'] = df_long['jam'].apply(lambda x: int(x.split('_')[0]) * 60)
-    df_long = df_long.sort_values(by=['feeder', 'tanggal', 'jam_order']).drop(columns=['jam_order'])
+    # Ubah '23_59' jadi 00_00 hari berikutnya
+    mask_2359 = df_long['jam'] == '23_59'
+    df_long.loc[mask_2359, 'tanggal'] = pd.to_datetime(df_long.loc[mask_2359, 'tanggal']) + pd.Timedelta(days=1)
+    df_long['tanggal'] = pd.to_datetime(df_long['tanggal'])
+    df_long.loc[mask_2359, 'jam'] = '00_00'
 
+    # Gabungkan tanggal + jam jadi timestamp
     df_long['timestamp'] = pd.to_datetime(
-        df_long['tanggal'].astype(str) + ' ' + df_long['jam'].str.replace('_', ':')
+        df_long['tanggal'].dt.strftime("%Y-%m-%d") + ' ' + df_long['jam'].str.replace('_', ':')
     )
 
-    # Rename agar seragam dengan app.py
-    df_long = df_long.rename(columns={'datetime': 'timestamp'})
+    # Urutkan berdasarkan feeder dan waktu
+    df_long = df_long.sort_values(by=['feeder', 'timestamp'])
+
+    # Bersihkan kolom
+    df_long = df_long[['timestamp', 'feeder', 'arus']].dropna().reset_index(drop=True)
 
     return df_long
+
 
 def load_data_from_db(feeder_name: str) -> pd.DataFrame:
     """

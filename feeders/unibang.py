@@ -3,25 +3,29 @@ import numpy as np
 import pickle
 import os
 
-MODEL_PATH = "models/model_unibang.pkl"
-FORECAST_HORIZON = 72
-HISTORY_LENGTH = 1440 
+# ===============================
+# CONFIG
+# ===============================
+MODEL_PATH = "models/model_Unibang.pkl"  
 
-# ======================================================
-# 🔹 Fungsi utilitas
-# ======================================================
 
+# ===============================
+# LOAD MODEL
+# ===============================
 def load_model():
-    """Muat model SARIMAX Unibang dari file pickle"""
+    """Load model pickle feeder Unibang"""
     if not os.path.exists(MODEL_PATH):
-        raise FileNotFoundError(f"Model file tidak ditemukan: {MODEL_PATH}")
+        raise FileNotFoundError(f"Model file not found: {MODEL_PATH}")
     with open(MODEL_PATH, "rb") as f:
         model = pickle.load(f)
     return model
 
 
-def get_expected_level(hour):
-    """Level arus nominal berdasarkan jam"""
+# ===============================
+# FITUR KHUSUS UNIBANG
+# ===============================
+def get_expected_level(hour: int) -> int:
+    """Level ekspektasi beban berdasarkan jam (mapping dari notebook)"""
     level_map = {
         1: 32, 2: 32, 3: 32, 4: 32, 5: 32, 6: 35,
         7: 39, 8: 42, 9: 45, 10: 55,
@@ -33,67 +37,68 @@ def get_expected_level(hour):
     return level_map.get(hour, 40)
 
 
-def prepare_exog(index):
-    """Buat fitur exogenous untuk indeks waktu tertentu"""
-    df = pd.DataFrame(index=index)
-    df["hour"] = df.index.hour
-    df["dayofweek"] = df.index.dayofweek
+def create_unibang_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Buat exogenous features (harus sama dengan training)"""
+    df_feat = pd.DataFrame(index=df.index)
+    y = df['arus']
 
-    # --- Fitur waktu & musiman ---
-    df["is_weekend"] = (df["dayofweek"] >= 5).astype(int)
-    df["night_constant"] = df["hour"].between(1, 6).astype(int)
-    df["peak_constant"] = df["hour"].between(11, 15).astype(int)
-    df["evening_decline"] = df["hour"].between(19, 22).astype(int)
-    df["morning_rise"] = df["hour"].between(6, 10).astype(int)
-    df["hour_sin"] = np.sin(2 * np.pi * df["hour"] / 24)
-    df["hour_cos"] = np.cos(2 * np.pi * df["hour"] / 24)
+    # time-based features
+    df_feat['hour'] = df.index.hour
+    df_feat['dayofweek'] = df.index.dayofweek
+    df_feat['is_weekend'] = (df_feat['dayofweek'] >= 5).astype(int)
+    df_feat['night_constant'] = df_feat['hour'].between(1, 6).astype(int)
+    df_feat['peak_constant'] = df_feat['hour'].between(11, 15).astype(int)
+    df_feat['evening_decline'] = df_feat['hour'].between(19, 22).astype(int)
+    df_feat['morning_rise'] = df_feat['hour'].between(6, 10).astype(int)
+    df_feat['hour_sin'] = np.sin(2 * np.pi * df_feat['hour'] / 24)
+    df_feat['hour_cos'] = np.cos(2 * np.pi * df_feat['hour'] / 24)
 
-    # --- Placeholder lag & statistik (isi 0 karena future) ---
-    df["lag_1"] = 0
-    df["lag_24"] = 0
-    df["stability"] = 1
-    df["expected_level"] = df["hour"].apply(get_expected_level)
+    # lag & rolling features
+    df_feat['lag_1'] = y.shift(1)
+    df_feat['lag_24'] = y.shift(24)
+    df_feat['stability'] = (y.rolling(6).std() < y.std() * 0.5).astype(int)
+    df_feat['expected_level'] = df_feat['hour'].apply(get_expected_level)
 
-    # --- Urutan kolom sesuai model ---
-    cols = [
-        "hour_sin","hour_cos","is_weekend",
-        "night_constant","peak_constant","evening_decline","morning_rise",
-        "lag_1","lag_24","stability","expected_level"
+    # pastikan urutan kolom sama dengan saat training
+    exog_vars = [
+        'hour_sin', 'hour_cos', 'is_weekend',
+        'night_constant', 'peak_constant', 'evening_decline', 'morning_rise',
+        'lag_1', 'lag_24', 'stability', 'expected_level'
     ]
-    return df[cols]
+    return df_feat[exog_vars].fillna(method='bfill').fillna(method='ffill')
 
 
-# ======================================================
-# 🔹 Fungsi utama forecasting
-# ======================================================
-
-def forecast(df_historical, steps=FORECAST_HORIZON, start_datetime=None):
+# ===============================
+# FUNGSI FORECAST
+# ===============================
+def forecast(df_historical: pd.DataFrame, steps: int = 72, start_datetime=None) -> pd.DataFrame:
     """
-    Forecast arus feeder Unibang untuk beberapa jam ke depan.
-    df_historical: DataFrame historis (index datetime, kolom 'arus')
-    steps: jumlah jam ke depan
-    start_datetime: waktu mulai forecast (default = max index + 1 jam)
+    Forecast arus 72 jam ke depan untuk feeder Unibang.
+    df_historical: DataFrame dengan kolom 'arus' dan index datetime
     """
     model = load_model()
 
-    if not isinstance(df_historical.index, pd.DatetimeIndex):
-        raise ValueError("df_historical harus memiliki index bertipe datetime")
+    if 'arus' not in df_historical.columns:
+        raise ValueError("DataFrame harus memiliki kolom 'arus'.")
 
-    df_historical = df_historical.tail(HISTORY_LENGTH).copy()
-
+    df_historical = df_historical.sort_index()
     if start_datetime is None:
         start_datetime = df_historical.index.max() + pd.Timedelta(hours=1)
 
-    future_index = pd.date_range(start=start_datetime, periods=steps, freq="H")
+    # Buat indeks waktu ke depan
+    future_index = pd.date_range(start=start_datetime, periods=steps, freq='H')
 
-    # --- Buat exogenous features untuk periode forecast ---
-    exog_future = prepare_exog(future_index)
-
-    # --- Prediksi menggunakan model ---
-    forecast_values = model.forecast(steps=steps, exog=exog_future)
+    # Siapkan exogenous features
+    try:
+        exog = create_unibang_features(df_historical)
+        exog_future = exog.iloc[-steps:] if len(exog) >= steps else exog
+        forecast_values = model.forecast(steps=steps, exog=exog_future)
+    except Exception as e:
+        print(f"[Warning] Forecast Unibang gagal pakai exog ({e}), mencoba tanpa exog..")
+        forecast_values = model.forecast(steps=steps)
 
     forecast_df = pd.DataFrame({
-        "datetime": future_index,
-        "forecast": np.maximum(forecast_values, 0).round(2)
+        'datetime': future_index,
+        'forecast': np.round(forecast_values, 2)
     })
     return forecast_df
