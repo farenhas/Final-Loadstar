@@ -6,7 +6,8 @@ import plotly.graph_objects as go
 from pathlib import Path
 import base64
 from utils.db_util import get_unique_feeders, load_data_from_db
-from feeders import birem, gegger, labang, tragah, torjun, galis, unibang
+from feeders import birem, gegger, labang, tragah, torjun, galis, unibang, alang_alang,alas_kembang, aros_baya, pemuda_kaffa, tanah_merah, suramadu, sekarbungu, parseh, tanjung_bumi
+
 
 # ============================================================
 # PAGE CONFIG & LOGO
@@ -257,7 +258,7 @@ HIST_DAYS = 7
 feeder_pairs = {
     "aros baya": ["pemuda kaffa", "tanjung bumi", "gegger"],
     "suramadu": ["pemuda kaffa", "parseh"],
-    "labang": ["sekarbung", "tragah", "galis", "alas kembang"],
+    "labang": ["sekarbungu", "tragah", "galis", "alas kembang"],
     "tragah": ["tanah merah", "labang", "alang-alang"],
     "alang-alang": ["tragah"],
     "parseh": ["suramadu", "unibang"],
@@ -270,14 +271,12 @@ feeder_pairs = {
     "birem": ["tanjung bumi"],
     "torjun": ["tanah merah", "galis"],
     "unibang": ["parseh"],
-    "sekarbung": ["labang"],
+    "sekarbungu": ["labang"],
 }
-for asal, tujuan_list in list(feeder_pairs.items()):
-    for tujuan in tujuan_list:
-        feeder_pairs.setdefault(tujuan.lower(), [])
-        if asal.lower() not in feeder_pairs[tujuan.lower()]:
-            feeder_pairs[tujuan.lower()].append(asal.lower())
+
+# Normalisasi semua feeder jadi huruf kecil agar konsisten
 feeder_pairs = {k.lower(): [t.lower() for t in v] for k, v in feeder_pairs.items()}
+
 
 # ============================================================
 # HELPER FUNCTIONS
@@ -312,7 +311,15 @@ def call_forecast_module(name, historical_df, start_datetime=None):
             "tragah": tragah,
             "torjun": torjun,
             "galis": galis,
-            "unibang": unibang, 
+            "unibang": unibang,
+            "alas kembang": alas_kembang,
+            "alang-alang": alang_alang,
+            "pemuda kaffa": pemuda_kaffa,
+            "aros baya": aros_baya,
+            "sekarbungu": sekarbungu,
+            "tanah merah": tanah_merah,
+            "suramadu": suramadu,
+            "tanjung bumi": tanjung_bumi,
         }
         module = module_map.get(name)
         if not module:
@@ -352,7 +359,7 @@ col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 1])
 hour_options = generate_hour_options()
 
 with col1:
-    selected_feeder = st.selectbox("Select Feeder", unique_feeders)
+    selected_feeder = st.selectbox("Penyulang Asal", unique_feeders)
 with col2:
     start_date = st.date_input("Tanggal Mulai")
 with col3:
@@ -420,12 +427,16 @@ with col_left:
     
     fig_hist = go.Figure()
     fig_hist.add_trace(go.Scatter(
-        x=df_hist_display["timestamp"],
-        y=df_hist_display["arus"].round(2),
-        mode="lines",
-        line=dict(color="#3498db", width=2.5),
-        fill='tozeroy',
-        fillcolor='rgba(52,152,219,0.15)'
+    x=df_hist_display["timestamp"],
+    y=df_hist_display["arus"].round(2),
+    mode="lines",
+    line=dict(color="#3498db", width=2.5),
+    fill='tonexty',
+    fillcolor='rgba(52,152,219,0.3)',  # Lebih solid di atas
+    fillgradient=dict(
+        type="vertical",
+        colorscale=[[0, "rgba(52,152,219,0)"],[1, "rgba(52,152,219,0.4)"]]
+    )
     ))
     fig_hist.update_layout(
         height=280,
@@ -565,7 +576,11 @@ with col_chart:
             line=dict(color="#2ecc71", width=3),
             marker=dict(size=5, color="#2ecc71"),
             fill='tozeroy',
-            fillcolor='rgba(46,204,113,0.15)'
+            fillcolor='rgba(46,204,113,0.25)', 
+            fillgradient=dict(
+                type="vertical",
+                colorscale=[[0, "rgba(46,204,113,0)"],[1, "rgba(46,204,113,0.35)"]]
+             )
         ))
         fig_fc.add_hline(
             y=320,
@@ -621,7 +636,22 @@ with col_table:
         )
 
 # ========================================================
-# ROW 3: DETAIL PREDIKSI FEEDER PASANGAN
+# DEBUG: Verifikasi data sebelum plotting
+# ========================================================
+# if partner_results:
+#     st.markdown("### Debug Info")
+#     for partner, max_load, status, label, df_fc in partner_results:
+#         merged_debug = pd.merge(fc_filtered, df_fc, on="timestamp", suffixes=("_main", "_partner"))
+#         merged_debug["total_transfer"] = merged_debug["forecast_main"] + merged_debug["forecast_partner"]
+        
+#         peak_idx = merged_debug["total_transfer"].idxmax()
+#         peak_time_debug = merged_debug.loc[peak_idx, "timestamp"]
+#         peak_val_debug = merged_debug.loc[peak_idx, "total_transfer"]
+        
+#         st.write(f"**{partner.upper()}**: Peak = {peak_val_debug:.1f} A pada {peak_time_debug}")
+
+# ========================================================
+# ROW 3: DETAIL PREDIKSI FEEDER PASANGAN (FIXED v6)
 # ========================================================
 if partner_results:
     st.markdown('<div class="card"><div class="card-header">Prediksi Feeder Manuver</div></div>', unsafe_allow_html=True)
@@ -629,42 +659,175 @@ if partner_results:
     cols = st.columns(3)
     for idx, (partner, max_load, status, label, df_fc) in enumerate(partner_results):
         with cols[idx % 3]:
-            color = "#28a745" if status == "safe" else "#ffc107" if status == "warning" else "#dc3545"
+            # Warna partner tetap Indigo
+            color_partner = "#6366f1"  # Indigo untuk partner
+            
+            # WARNA BARU: Warna total berdasarkan status - LEBIH CERAH & KONTRAS
+            if status == "safe":
+                color_total = "#22c55e"  # Lime green - lebih terang
+                fill_rgba = "rgba(34, 197, 94, 0.15)"  # Fill transparan hijau
+            elif status == "warning":
+                color_total = "#e3b449"  # Amber/Orange - sangat terlihat
+                fill_rgba = "rgba(227, 180, 73, 0.15)"  # Fill transparan kuning
+            else:
+                color_total = "#ef4444"  # Red tetap
+                fill_rgba = "rgba(239, 68, 68, 0.15)"  # Fill transparan merah
+            
+            # Merge untuk mendapatkan total
+            merged_for_chart = pd.merge(
+                fc_filtered,
+                df_fc,
+                on="timestamp",
+                suffixes=("_main", "_partner")
+            )
+            merged_for_chart["total_transfer"] = merged_for_chart["forecast_main"] + merged_for_chart["forecast_partner"]
+            
+            # Cari peak dengan cara yang lebih eksplisit
+            merged_for_chart_reset = merged_for_chart.reset_index(drop=True)
+            peak_idx_loc = merged_for_chart_reset["total_transfer"].idxmax()
+            peak_value = merged_for_chart_reset.loc[peak_idx_loc, "total_transfer"]
+            peak_time = merged_for_chart_reset.loc[peak_idx_loc, "timestamp"]
             
             fig = go.Figure()
+            
+            # Line 1: Forecast Partner (Indigo) - dengan fill
             fig.add_trace(go.Scatter(
                 x=df_fc["timestamp"],
                 y=df_fc["forecast"].round(2),
-                mode="lines+markers",
-                line=dict(color=color, width=2.5),
-                marker=dict(size=4, color=color),
+                mode="lines",
+                name=f"{partner.upper()}",
+                line=dict(color=color_partner, width=2.5, shape='spline'),
                 fill='tozeroy',
-                fillcolor='rgba(0,0,0,0.05)'
+                fillcolor='rgba(99, 102, 241, 0.1)',  
+                fillgradient=dict(
+                type="vertical",
+                colorscale=[
+                    [0, "rgba(99, 102, 241, 0)"],      # Bawah: transparan penuh
+                    [1, "rgba(99, 102, 241, 0.3)"]     # Atas: lebih solid
+                    ]
+                ),
+                hovertemplate='<b>%{fullData.name}</b><br>Waktu: %{x|%d %b %H:%M}<br>Arus: %{y:.1f} A<extra></extra>'
             ))
-            fig.update_layout(
-                height=220,
-                title=dict(text=f"{partner.upper()}", font=dict(size=12, color=color, weight=600)),
-                template="plotly_white",
-                margin=dict(l=0, r=0, t=35, b=0),
-                xaxis_title="Waktu",
-                yaxis_title="Arus (A)",
-                xaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickformat="%d %b\n%H:%M", tickfont=dict(size=9)),
-                yaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickfont=dict(size=9)),
-                plot_bgcolor='white',
-                paper_bgcolor='white',
-                annotations=[
-                    dict(
-                        text=f"Peak: {max_load} A",
-                        xref="paper", yref="paper",
-                        x=0.98, y=0.98,
-                        xanchor="right", yanchor="top",
-                        showarrow=False,
-                        bgcolor="rgba(255,255,255,0.95)",
-                        bordercolor=color,
-                        borderwidth=1,
-                        borderpad=4,
-                        font=dict(size=9, color=color, weight=600)
-                    )
-                ]
+            
+            # Line 2: Total Gabungan dengan FILL TRANSPARAN
+            fig.add_trace(go.Scatter(
+                x=merged_for_chart["timestamp"],
+                y=merged_for_chart["total_transfer"].round(2),
+                mode="lines+markers",
+                name="Total Gabungan",
+                line=dict(
+                    color=color_total, 
+                    width=3.5,  # Sedikit dikurangi agar tidak terlalu dominan
+                    shape='spline'
+                ),
+                fill='tonexty',  # Fill ke trace sebelumnya (partner line)
+                fillgradient=dict(
+                    type="vertical",
+                    colorscale=[
+                        [0, fill_rgba.replace('0.15', '0')],  
+                        [1, fill_rgba]  
+                    ]
+                ),
+                marker=dict(
+                    size=6,  # Marker sedang
+                    color=color_total, 
+                    symbol='circle', 
+                    line=dict(width=2, color='white')
+                ),
+                hovertemplate='<b>Total Gabungan</b><br>Waktu: %{x|%d %b %H:%M}<br>Arus: %{y:.1f} A<extra></extra>'
+            ))
+            
+            # Garis batas 320A
+            fig.add_hline(
+                y=320,
+                line=dict(color="#dc3545", dash="dash", width=2.5),
+                annotation_text="Batas (320A)",
+                annotation_position="top right",
+                annotation=dict(
+                    font=dict(size=8, color="#dc3545", family="Inter", weight=600),
+                    bgcolor="rgba(255, 255, 255, 0.95)",
+                    borderpad=2,
+                    xshift=-5,
+                    yshift=-5
+                )
             )
-            st.plotly_chart(fig, use_container_width=True)
+            
+            # Annotation untuk Peak dengan WARNA LEBIH TERANG
+            fig.add_annotation(
+                x=peak_time,
+                y=peak_value,
+                text=f"Peak: {round(peak_value, 1)} A",
+                showarrow=True,
+                arrowhead=2,
+                arrowsize=1.2,
+                arrowwidth=2.5,
+                arrowcolor=color_total,
+                ax=0,
+                ay=-35,
+                bgcolor="rgba(255, 255, 255, 0.98)",
+                bordercolor=color_total,
+                borderwidth=2.5,
+                borderpad=6,
+                font=dict(
+                    size=10,
+                    color=color_total, 
+                    family="Inter", 
+                    weight=700
+                )
+            )
+            
+            fig.update_layout(
+                height=300,
+                title=dict(
+                    text=f"<b>{partner.upper()}</b>",
+                    font=dict(size=13, color="#1f2937", family="Inter", weight=600),
+                    x=0.5,
+                    xanchor='center',
+                    y=0.97,
+                    yanchor='top'
+                ),
+                template="plotly_white",
+                margin=dict(l=50, r=50, t=45, b=80),
+                xaxis_title="",
+                yaxis_title="Arus (A)",
+                xaxis=dict(
+                    showgrid=True, 
+                    gridcolor='#f3f4f6', 
+                    tickformat="%d %b\n%H:%M", 
+                    tickfont=dict(size=8, color="#6b7280", family="Inter"),
+                    tickangle=0,
+                    automargin=True
+                ),
+                yaxis=dict(
+                    showgrid=True, 
+                    gridcolor='#f3f4f6', 
+                    tickfont=dict(size=9, color="#374151", family="Inter"),
+                    zeroline=True,
+                    zerolinecolor='#e5e7eb',
+                    zerolinewidth=1,
+                    range=[0, max(merged_for_chart["total_transfer"].max() * 1.2, 360)],
+                    automargin=True
+                ),
+                plot_bgcolor='#fafbfc',
+                paper_bgcolor='white',
+                showlegend=True,
+                legend=dict(
+                    orientation="h",
+                    yanchor="top",
+                    y=-0.2,
+                    xanchor="center",
+                    x=0.5,
+                    font=dict(size=8, family="Inter"),
+                    bgcolor="rgba(255, 255, 255, 0.9)",
+                    bordercolor="#e5e7eb",
+                    borderwidth=1
+                ),
+                hoverlabel=dict(
+                    bgcolor="white",
+                    font_size=10,
+                    font_family="Inter",
+                    bordercolor="#e5e7eb"
+                )
+            )
+            
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
