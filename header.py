@@ -47,8 +47,8 @@ st.markdown(
 col_logo, col_title = st.columns([1, 8])
 with col_logo:
     st.image(
-        "https://via.placeholder.com/80x80?text=LOADSTAR", width=80
-    )  # Ganti dengan path logo Anda
+        "https://via.placeholder.com/500x500?text=LOADSTAR", width=500
+    )  
 with col_title:
     st.markdown(
         '<div class="main-header">Load Monitoring Dashboard</div>',
