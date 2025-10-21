@@ -16,11 +16,12 @@ def load_model():
     return model
 def prepare_exog(index):
     df = pd.DataFrame(index=index)
-    df["hour"] = df.index.hour
+    df['hour'] = df.index.hour
     df['is_7to12'] = df['hour'].apply(lambda x: 1 if 7 <= x <= 12 else 0)
-    df['roll_mean_3'] = df['arus_diff'].rolling(3, min_periods=1).mean()
-    df['roll_std_3'] = df['arus_diff'].rolling(3, min_periods=1).std().fillna(0)
-    return df[['is_7to12','roll_mean_3','roll_std_3']]
+    df['is_18to22'] = df['hour'].apply(lambda x: 1 if 18 <= x <= 22 else 0)
+    df['dayofweek'] = df.index.dayofweek
+
+    return df[[''is_7to12', 'is_18to22', 'dayofweek']]
 
 def forecast(df_historical, steps=FORECAST_HORIZON, start_datetime=None):
 
@@ -44,4 +45,5 @@ def forecast(df_historical, steps=FORECAST_HORIZON, start_datetime=None):
         "datetime": future_index,
         "forecast": np.maximum(forecast_values, 0).round(2)
     })
+
     return forecast_df
