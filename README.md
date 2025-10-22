@@ -21,6 +21,6 @@ pip install -r requirements.txt
 
 2. **Run**
 ```powershell
-streamlit run app.py
+streamlit run app_modern.py
 ```
 
