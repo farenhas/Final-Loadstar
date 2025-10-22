@@ -1,7 +1,4 @@
 # Prediksi Arus PLN
-
-Dashboard prediksi arus listrik menggunakan Streamlit dan Machine Learning.
-
 ## Prasyarat
 
 - Python 3.8 atau lebih tinggi
